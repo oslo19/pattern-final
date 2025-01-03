@@ -16,8 +16,8 @@ mongoose.connect(process.env.MONGODB_URI, {
 app.use(cors({
   origin: function(origin, callback) {
     const allowedOrigins = [
-      'https://micro-final.vercel.app',
-      'https://micro-final-frontend-c0s2sdg3z-oslo19s-projects.vercel.app',
+      'https://pattern-final-frontend.vercel.app',
+      'https://pattern-final-frontend-mwywazc9d-oslo19s-projects.vercel.app',
       'http://localhost:5173',
       'http://localhost:3000',
       'http://127.0.0.1:5173'
