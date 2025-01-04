@@ -1,5 +1,6 @@
 import { useEffect, useState, Suspense, lazy } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useProgress } from '../contexts/ProgressContext';
 
 // Lazy load the chart component
 const DoughnutChart = lazy(() => import('./DoughnutChart'));
@@ -24,6 +25,7 @@ const getSuccessRate = (correct: number, attempted: number): string => {
 
 export function Profile() {
   const { user } = useAuth();
+  const { refreshTrigger } = useProgress();
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const [chartError, setChartError] = useState(false);
 
@@ -31,30 +33,56 @@ export function Profile() {
     async function fetchUserData() {
       if (user) {
         try {
+          console.log('Fetching user data for:', user.uid);
           const response = await fetch(`${import.meta.env.VITE_API_URL}/users/${user.uid}`);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
           const data = await response.json();
-          setUserProgress(data.progress);
+          console.log('Received user data:', data);
+          
+          // Ensure patternStats exists with default values
+          const defaultStats = {
+            numeric: { attempted: 0, correct: 0 },
+            symbolic: { attempted: 0, correct: 0 },
+            shape: { attempted: 0, correct: 0 },
+            logical: { attempted: 0, correct: 0 }
+          };
+          
+          const progress = {
+            ...data.progress,
+            patternStats: {
+              ...defaultStats,
+              ...(data.progress?.patternStats || {})
+            }
+          };
+          
+          console.log('Processed progress data:', progress);
+          setUserProgress(progress);
         } catch (error) {
           console.error('Error fetching user data:', error);
+          setChartError(true);
         }
       }
     }
 
     fetchUserData();
-  }, [user]);
+  }, [user, refreshTrigger]);
 
   const patternData = {
-    labels: Object.keys(userProgress?.patternStats || {}).map(type => 
+    labels: ['Numeric', 'Symbolic', 'Shape', 'Logical'].map(type => 
       `${type} (${getSuccessRate(
-        userProgress?.patternStats[type].correct || 0,
-        userProgress?.patternStats[type].attempted || 0
+        userProgress?.patternStats[type.toLowerCase()]?.correct || 0,
+        userProgress?.patternStats[type.toLowerCase()]?.attempted || 0
       )}%)`
     ),
     datasets: [{
       label: 'Success Rate by Pattern Type',
-      data: Object.values(userProgress?.patternStats || {}).map(stat => 
-        (stat.correct / stat.attempted) * 100 || 0
-      ),
+      data: ['numeric', 'symbolic', 'shape', 'logical'].map(type => {
+        const stats = userProgress?.patternStats[type];
+        if (!stats || stats.attempted === 0) return 0;
+        return (stats.correct / stats.attempted) * 100;
+      }),
       backgroundColor: [
         'rgba(52, 211, 153, 0.8)',  // emerald
         'rgba(59, 130, 246, 0.8)',  // blue
