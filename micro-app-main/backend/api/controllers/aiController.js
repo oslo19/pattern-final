@@ -1,43 +1,54 @@
 const axios = require('axios');
 
+const wrapMathInLatex = (text) => {
+    if (!text) return text;
+    
+    // Function to wrap individual math expressions
+    const wrapExpression = (expr) => `\\(${expr}\\)`;
+    
+    return text
+        // Replace fractions with division
+        .replace(/(\d+)\/(\d+)/g, wrapExpression('\\frac{$1}{$2}'))
+        
+        // Replace powers and exponents
+        .replace(/(\d+|\w+)\^(-?\d+)/g, wrapExpression('$1^{$2}'))
+        
+        // Replace terms like 2x, 6x^2
+        .replace(/(\d*[a-z])(?:\^?\{?(\d+)\}?)?/g, (match, base, exp) => 
+            wrapExpression(exp ? `${base}^{${exp}}` : base))
+        
+        // Replace operations between terms
+        .replace(/(\\\(\w+(?:\^{\d+})?)\s*([+\-*/])\s*(\w+(?:\^{\d+})?\\\))/g, 
+            (_, term1, op, term2) => `\\(${term1.slice(2, -2)} ${op} ${term2.slice(2, -2)}\\)`)
+        
+        // Replace standalone numbers in mathematical context
+        .replace(/(?<=\d)\s*([+\-*/])\s*(?=\d)/g, ' $1 ')
+        
+        // Replace summations and other LaTeX commands
+        .replace(/(\\sum|\\frac|\\int)(?![^\{]*\\\))/g, wrapExpression('$1'))
+        
+        // Replace expressions with equals signs
+        .replace(/(\w+(?:\^{\d+})?)\s*=\s*(\w+(?:\^{\d+})?)/g, 
+            (_, left, right) => wrapExpression(`${left} = ${right}`));
+};
+
 const getHint = async (req, res) => {
     try {
         const { pattern, userAttempts } = req.body;
-        console.log('Received pattern for hint generation:', pattern);
         
-        // Generate prompts for all three hint levels
         const hintPrompts = [
-            // Hint Level 1 - Basic Observation
-            `Provide a basic hint for this ${pattern.type} pattern: ${pattern.sequence}
-            Requirements for Hint Level 1:
-            - Point out obvious visual patterns
-            - Guide initial observations
-            - Keep it simple and encouraging
-            - Don't reveal the solution method
-            Format: Just provide the basic hint in 1-2 sentences.`,
-
-            // Hint Level 2 - Pattern Analysis
-            `Provide a more detailed hint for this ${pattern.type} pattern: ${pattern.sequence}
-            Requirements for Hint Level 2:
-            - Break down the pattern structure
-            - Highlight key relationships
-            - Suggest a solution approach
-            - Don't give away the answer
-            Format: Provide a structured hint with pattern analysis.`,
-
-            // Hint Level 3 - Comprehensive Guide
-            `Provide a comprehensive hint for this ${pattern.type} pattern: ${pattern.sequence}
-            Requirements for Hint Level 3:
-            - Detailed step-by-step guidance
-            - Explain the pattern logic
-            - Show how to verify the pattern
-            - Everything except the direct answer
-            Format: Provide a detailed explanation with steps to solve.`
+            `Provide a basic hint for this ${pattern.type} pattern: ${pattern.sequence}. 
+             Format ALL mathematical expressions using LaTeX notation, including simple terms like x or 2x.`,
+            
+            `Provide a detailed hint for this ${pattern.type} pattern: ${pattern.sequence}. 
+             Format ALL mathematical expressions using LaTeX notation, including variables, powers, and operations.`,
+            
+            `Provide a comprehensive step-by-step analysis for this ${pattern.type} pattern: ${pattern.sequence}. 
+             Format ALL mathematical expressions using LaTeX notation, including every mathematical term and operation.`
         ];
 
-        console.log('Generating hints for all levels...');
+        console.log('Generating hints...');
         const responses = await Promise.all(hintPrompts.map(async (prompt, index) => {
-            console.log(`Generating hint level ${index + 1}...`);
             const response = await axios.post(
                 'https://api.openai.com/v1/chat/completions',
                 {
@@ -45,7 +56,7 @@ const getHint = async (req, res) => {
                     messages: [
                         {
                             role: "system",
-                            content: "You are a patient math tutor providing scaffolded hints."
+                            content: "You are a math tutor. Format ALL mathematical expressions using LaTeX notation, wrapping them in \\( and \\). Even simple terms like x should be formatted as \\(x\\)."
                         },
                         {
                             role: "user",
@@ -61,28 +72,26 @@ const getHint = async (req, res) => {
                     }
                 }
             );
-            console.log(`Hint level ${index + 1} generated:`, response.data.choices[0].message.content);
-            return response;
+            
+            let content = response.data.choices[0].message.content.trim();
+            content = wrapMathInLatex(content);
+            console.log(`Processed hint level ${index + 1}:`, content);
+            return content;
         }));
 
-        const hints = responses.map(response => 
-            response.data.choices[0].message.content.trim()
-        );
-
-        console.log('All hints generated:', hints);
-
         const responseData = {
-            hint: hints[0], // Basic hint
-            reasoning: hints[1], // Detailed hint
-            tips: hints[2].split('\n'), // Comprehensive hint split into steps
+            hint: responses[0],
+            reasoning: responses[1],
+            tips: responses[2].split('\n').map(line => wrapMathInLatex(line)),
             confidence: 0.9,
-            relatedConcepts: `This pattern involves concepts like ${pattern.type === 'numeric' ? 'arithmetic sequences and differences' : 
-                pattern.type === 'symbolic' ? 'mathematical notation and operations' :
-                pattern.type === 'shape' ? 'geometric progressions and spatial patterns' :
-                'logical relationships and pattern recognition'}`
+            relatedConcepts: wrapMathInLatex(`This pattern involves ${
+                pattern.type === 'symbolic' ? 'mathematical notation with variables like x^n and operations' :
+                pattern.type === 'numeric' ? 'arithmetic sequences and differences' :
+                'pattern recognition'
+            }`)
         };
 
-        console.log('Sending response:', responseData);
+        console.log('Sending formatted response:', responseData);
         res.json(responseData);
 
     } catch (error) {
