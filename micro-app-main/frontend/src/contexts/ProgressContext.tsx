@@ -1,24 +1,24 @@
-import { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 
 interface ProgressContextType {
-  shouldRefresh: boolean;
+  refreshTrigger: number;
   triggerRefresh: () => void;
 }
 
-const ProgressContext = createContext<ProgressContextType>({ 
-  shouldRefresh: false, 
-  triggerRefresh: () => {} 
+const ProgressContext = createContext<ProgressContextType>({
+  refreshTrigger: 0,
+  triggerRefresh: () => {}
 });
 
 export function ProgressProvider({ children }: { children: React.ReactNode }) {
-  const [shouldRefresh, setShouldRefresh] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const triggerRefresh = () => {
-    setShouldRefresh(prev => !prev);
+    setRefreshTrigger(prev => prev + 1);
   };
 
   return (
-    <ProgressContext.Provider value={{ shouldRefresh, triggerRefresh }}>
+    <ProgressContext.Provider value={{ refreshTrigger, triggerRefresh }}>
       {children}
     </ProgressContext.Provider>
   );
