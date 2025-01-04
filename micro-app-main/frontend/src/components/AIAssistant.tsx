@@ -1,6 +1,7 @@
 import { Brain, ChevronRight, ChevronLeft } from 'lucide-react';
 import { AIHint } from '../types';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import katex from 'katex';
 
 interface AIAssistantProps {
   hint: AIHint | null;
@@ -9,6 +10,7 @@ interface AIAssistantProps {
 
 export function AIAssistant({ hint, isLoading }: AIAssistantProps) {
   const [currentHintLevel, setCurrentHintLevel] = useState(1);
+  const hintContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (hint) {
@@ -16,6 +18,56 @@ export function AIAssistant({ hint, isLoading }: AIAssistantProps) {
       console.log('New hint received, resetting to level 1');
     }
   }, [hint]);
+
+  useEffect(() => {
+    if (hintContentRef.current && hint) {
+      const currentHint = getProgressiveHint();
+      if (!currentHint) {
+        console.error('No hint available for current level');
+        return;
+      }
+      console.log('Current hint level:', currentHintLevel);
+      console.log('Raw hint content:', currentHint.content);
+
+      try {
+        // Split content and render math parts with KaTeX
+        const parts = currentHint.content.split(/(\\\(.*?\\\))/g);
+        console.log('Split content into parts:', parts);
+
+        hintContentRef.current.innerHTML = parts.map(part => {
+          if (part.startsWith('\\(') && part.endsWith('\\)')) {
+            console.log('Found math expression:', part);
+            const math = part.slice(2, -2); // Remove \( and \)
+            console.log('Cleaned math expression:', math);
+            
+            const span = document.createElement('span');
+            try {
+              katex.render(math, span, {
+                throwOnError: false,
+                displayMode: false,
+                trust: true,
+                strict: false
+              });
+              console.log('Successfully rendered math:', span.outerHTML);
+            } catch (katexError) {
+              console.error('KaTeX rendering error:', katexError);
+            }
+            return span.outerHTML;
+          }
+          console.log('Regular text part:', part);
+          return part;
+        }).join('');
+
+        console.log('Final rendered content:', hintContentRef.current.innerHTML);
+      } catch (error) {
+        console.error('Overall rendering error:', error);
+        if (hintContentRef.current) {
+          hintContentRef.current.textContent = currentHint.content;
+          console.log('Fallback to plain text:', currentHint.content);
+        }
+      }
+    }
+  }, [hint, currentHintLevel]);
 
   if (isLoading) {
     return (
@@ -57,6 +109,8 @@ export function AIAssistant({ hint, isLoading }: AIAssistantProps) {
   };
 
   const currentHint = getProgressiveHint();
+  if (!currentHint) return null;
+
   const canShowNextHint = currentHintLevel < 3;
   const canShowPrevHint = currentHintLevel > 1;
 
@@ -75,7 +129,10 @@ export function AIAssistant({ hint, isLoading }: AIAssistantProps) {
       <div className="space-y-4">
         <div>
           <h3 className="font-medium text-gray-700 mb-1">{currentHint.title}:</h3>
-          <p className="text-gray-600 whitespace-pre-line">{currentHint.content}</p>
+          <div 
+            ref={hintContentRef}
+            className="text-gray-600 whitespace-pre-line"
+          />
         </div>
 
         <div className="flex justify-between items-center">
