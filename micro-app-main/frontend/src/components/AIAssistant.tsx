@@ -26,44 +26,64 @@ export function AIAssistant({ hint, isLoading }: AIAssistantProps) {
         console.error('No hint available for current level');
         return;
       }
-      console.log('Current hint level:', currentHintLevel);
-      console.log('Raw hint content:', currentHint.content);
 
       try {
-        // Split content and render math parts with KaTeX
-        const parts = currentHint.content.split(/(\\\(.*?\\\))/g);
+        // Split content by LaTeX delimiters
+        const parts = currentHint.content.split(/(\\[\[\(].*?\\[\]\)])/g);
         console.log('Split content into parts:', parts);
 
-        hintContentRef.current.innerHTML = parts.map(part => {
-          if (part.startsWith('\\(') && part.endsWith('\\)')) {
-            console.log('Found math expression:', part);
-            const math = part.slice(2, -2); // Remove \( and \)
-            console.log('Cleaned math expression:', math);
-            
-            const span = document.createElement('span');
+        // Clear previous content
+        hintContentRef.current.innerHTML = '';
+
+        // Process each part
+        parts.forEach(part => {
+          if (part.startsWith('\\[') && part.endsWith('\\]')) {
+            // Display math mode
+            const math = part.slice(2, -2);
+            const div = document.createElement('div');
+            div.className = 'my-2';
             try {
-              katex.render(math, span, {
+              katex.render(math, div, {
+                displayMode: true,
                 throwOnError: false,
-                displayMode: false,
                 trust: true,
                 strict: false
               });
-              console.log('Successfully rendered math:', span.outerHTML);
-            } catch (katexError) {
-              console.error('KaTeX rendering error:', katexError);
+              hintContentRef.current?.appendChild(div);
+            } catch (error) {
+              console.error('KaTeX display math error:', error);
+              div.textContent = math;
+              hintContentRef.current?.appendChild(div);
             }
-            return span.outerHTML;
+          } else if (part.startsWith('\\(') && part.endsWith('\\)')) {
+            // Inline math mode
+            const math = part.slice(2, -2);
+            const span = document.createElement('span');
+            span.className = 'mx-1';
+            try {
+              katex.render(math, span, {
+                displayMode: false,
+                throwOnError: false,
+                trust: true,
+                strict: false
+              });
+              hintContentRef.current?.appendChild(span);
+            } catch (error) {
+              console.error('KaTeX inline math error:', error);
+              span.textContent = math;
+              hintContentRef.current?.appendChild(span);
+            }
+          } else {
+            // Regular text
+            const text = document.createTextNode(part);
+            hintContentRef.current?.appendChild(text);
           }
-          console.log('Regular text part:', part);
-          return part;
-        }).join('');
+        });
 
-        console.log('Final rendered content:', hintContentRef.current.innerHTML);
       } catch (error) {
         console.error('Overall rendering error:', error);
         if (hintContentRef.current) {
           hintContentRef.current.textContent = currentHint.content;
-          console.log('Fallback to plain text:', currentHint.content);
         }
       }
     }
@@ -131,7 +151,7 @@ export function AIAssistant({ hint, isLoading }: AIAssistantProps) {
           <h3 className="font-medium text-gray-700 mb-1">{currentHint.title}:</h3>
           <div 
             ref={hintContentRef}
-            className="text-gray-600 whitespace-pre-line"
+            className="text-gray-600 whitespace-pre-line prose prose-emerald max-w-none"
           />
         </div>
 
