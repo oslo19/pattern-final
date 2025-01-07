@@ -13,7 +13,17 @@ const getHint = async (req, res) => {
                 For numeric patterns, focus on:
                 - Arithmetic operations
                 - Differences between terms
-                - Growth patterns`;
+                - Growth patterns
+                
+                IMPORTANT: All mathematical expressions must be wrapped in LaTeX delimiters:
+                - Use \\( \\) for inline math
+                - Use \\[ \\] for display math
+                - For fractions, always use \\frac{numerator}{denominator}
+                
+                Example format:
+                - For inline: The difference is \\( 5 + 3 = 8 \\)
+                - For display: \\[ x_{n+1} = x_n + d \\]
+                - For fractions: \\( \\frac{1}{2} \\) or \\[ \\frac{a+b}{c+d} \\]`;
                 break;
             case 'symbolic':
                 typeSpecificPrompt = `This is a mathematical/symbolic pattern: ${pattern.sequence}
@@ -21,7 +31,16 @@ const getHint = async (req, res) => {
                 - Mathematical operations
                 - Variable relationships
                 - Power/exponent patterns
-                Use LaTeX notation in the response.`;
+                
+                IMPORTANT: All mathematical expressions must be wrapped in LaTeX delimiters:
+                - Use \\( \\) for inline math
+                - Use \\[ \\] for display math
+                - For fractions, always use \\frac{numerator}{denominator}
+                
+                Example format:
+                - For inline: The next term is \\( x^{n+1} \\)
+                - For display: \\[ \\frac{d}{dx}(x^n) = nx^{n-1} \\]
+                - For fractions: \\( \\frac{x+1}{x-1} \\)`;
                 break;
             case 'shape':
                 typeSpecificPrompt = `This is a shape pattern: ${pattern.sequence}
@@ -47,8 +66,8 @@ const getHint = async (req, res) => {
             - Points out obvious patterns
             - Guides initial observations
             - Keeps it simple and encouraging
-            ${pattern.type === 'symbolic' ? 'Use LaTeX notation wrapped in \\( \\) for mathematical expressions.' : ''}
-            Format: Just provide the basic hint in 1-2 sentences.`,
+            Format: Just provide the basic hint in 1-2 sentences.
+            IMPORTANT: Wrap all mathematical expressions in LaTeX delimiters and use proper \\frac notation for fractions.`,
 
             // Hint Level 2 - Pattern Analysis
             `${typeSpecificPrompt}
@@ -56,8 +75,20 @@ const getHint = async (req, res) => {
             - Breaks down the pattern structure
             - Highlights key relationships
             - Suggests a solution approach
-            ${pattern.type === 'symbolic' ? 'Use LaTeX notation wrapped in \\( \\) for mathematical expressions.' : ''}
-            Format: Provide a structured hint with pattern analysis.`,
+            Format: Provide a structured hint with pattern analysis.
+            IMPORTANT: 
+            - Wrap all mathematical expressions in LaTeX delimiters
+            - Use proper \\frac notation for all fractions
+            - For inline fractions use: \\( \\frac{a}{b} \\)
+            - For display fractions use: \\[ \\frac{a}{b} \\]
+            
+            For numeric patterns, use this format:
+            Step 1: Calculate differences
+            \\[ d_1 = term_2 - term_1 = value \\]
+            
+            For symbolic patterns, use this format:
+            Step 1: Analyze terms
+            \\[ term_n = expression \\]`,
 
             // Hint Level 3 - Comprehensive Guide
             `${typeSpecificPrompt}
@@ -65,8 +96,20 @@ const getHint = async (req, res) => {
             - Gives step-by-step guidance
             - Explains the pattern logic
             - Shows how to verify the pattern
-            ${pattern.type === 'symbolic' ? 'Use LaTeX notation wrapped in \\( \\) for mathematical expressions.' : ''}
-            Format: Provide a detailed explanation with steps to solve.`
+            Format: Provide a detailed explanation with steps to solve.
+            IMPORTANT: 
+            - Wrap all mathematical expressions in LaTeX delimiters
+            - Use proper \\frac notation for all fractions
+            - For inline fractions use: \\( \\frac{a}{b} \\)
+            - For display fractions use: \\[ \\frac{a}{b} \\]
+            
+            For numeric patterns, use this format:
+            1. First difference: \\[ d_1 = term_2 - term_1 = value \\]
+            2. Pattern rule: \\[ term_{n+1} = term_n + expression \\]
+            
+            For symbolic patterns, use this format:
+            1. Term analysis: \\[ term_n = expression \\]
+            2. Pattern rule: \\[ next\\_term = expression \\]`
         ];
 
         console.log('Generating hints for all levels...');
@@ -79,7 +122,7 @@ const getHint = async (req, res) => {
                     messages: [
                         {
                             role: "system",
-                            content: "You are a mathematics tutor providing hints. For symbolic/mathematical patterns, use LaTeX notation wrapped in \\( \\) for all mathematical expressions."
+                            content: "You are a mathematics tutor providing hints. Always wrap mathematical expressions in LaTeX delimiters: \\( \\) for inline math and \\[ \\] for display math. For fractions, always use proper \\frac{numerator}{denominator} notation."
                         },
                         {
                             role: "user",
@@ -87,7 +130,7 @@ const getHint = async (req, res) => {
                         }
                     ],
                     temperature: 0.7,
-                    max_tokens: 300
+                    max_tokens: 500
                 },
                 {
                     headers: {
@@ -98,10 +141,28 @@ const getHint = async (req, res) => {
             return response.data.choices[0].message.content.trim();
         }));
 
+        // Process responses to ensure proper LaTeX formatting
+        const processedResponses = responses.map(response => {
+            // Replace any unformatted mathematical expressions with LaTeX formatting
+            return response
+                // Format inline math expressions
+                .replace(/(\d+[\s]*[-+*/=][\s]*\d+)/g, '\\($1\\)')
+                // Format display math expressions
+                .replace(/(\d+[\s]*[-+*/=][\s]*\d+\s*=\s*\d+)/g, '\\[$1\\]')
+                // Format variable expressions
+                .replace(/([a-z]_[a-z+\d]|[a-z]\^[a-z+\d])/g, '\\($1\\)')
+                // Format fractions like a/b that aren't already in \frac format
+                .replace(/(\d+)\/(\d+)(?![}\)])/g, '\\(\\frac{$1}{$2}\\)')
+                // Format inline fractions that are already in \frac format but missing delimiters
+                .replace(/\\frac{([^}]+)}{([^}]+)}(?![}\)])/g, '\\(\\frac{$1}{$2}\\)')
+                // Ensure display math fractions have proper delimiters
+                .replace(/\\frac{([^}]+)}{([^}]+)}\s*=\s*[^\\]*/g, '\\[\\frac{$1}{$2}\\]');
+        });
+
         const responseData = {
-            hint: responses[0],
-            reasoning: responses[1],
-            tips: responses[2].split('\n'),
+            hint: processedResponses[0],
+            reasoning: processedResponses[1],
+            tips: processedResponses[2].split('\n'),
             confidence: 0.9,
             relatedConcepts: `Pattern type: ${pattern.type}. ${
                 pattern.type === 'numeric' ? 'Involves arithmetic sequences and differences.' :
