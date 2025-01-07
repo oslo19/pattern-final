@@ -857,30 +857,26 @@ const generateDetailedExplanation = (sequence, answer, type, rule) => {
         const lastNumber = numbers[numbers.length - 1];
         const calculatedAnswer = lastNumber + nextDiff;
 
-        // Include the rule in the explanation
-        return `Let's analyze this sequence ${sequence} step by step:
+        // Include the rule in the explanation with proper LaTeX formatting
+        return `Let's analyze this sequence \\(${sequence}\\) step by step:
 
 Rule: ${rule}
 
-Step 1: Find the differences between consecutive terms: ${
-    numbers.slice(0, -1).map((n, i) => 
-        `${numbers[i + 1]} - ${n} = ${differences[i]}`
-    ).join(' ')
-} 
+Step 1: Find the differences between consecutive terms:
+${numbers.slice(0, -1).map((n, i) => 
+    `\\[ ${numbers[i + 1]} - ${n} = ${differences[i]} \\]`
+).join('\n')}
 
-Step 2: Observe the pattern in the differences: ${
-    getDifferencePattern(differences)
-} 
+Step 2: Observe the pattern in the differences:
+${getDifferencePattern(differences)}
 
-Step 3: Calculate the next difference: ${
-    getNextDifferenceExplanation(differences)
-} 
+Step 3: Calculate the next difference:
+${getNextDifferenceExplanation(differences)}
 
-Step 4: Add this difference to the last number: ${
-    lastNumber} + ${nextDiff} = ${calculatedAnswer
-} 
+Step 4: Add this difference to the last number:
+\\[ ${lastNumber} + ${nextDiff} = ${calculatedAnswer} \\]
 
-Therefore, the next number in the sequence is ${calculatedAnswer}.`;
+Therefore, the next number in the sequence is \\(${calculatedAnswer}\\).`;
     }
     
     if (type === 'symbolic') {
@@ -888,13 +884,13 @@ Therefore, the next number in the sequence is ${calculatedAnswer}.`;
             const terms = sequence.split(',').map(t => t.trim());
             const validTerms = terms.filter(t => t !== '?');
 
-            // Basic pattern analysis
+            // Basic pattern analysis with proper LaTeX formatting
             const explanation = `Let's analyze this symbolic sequence step by step:
 
 Rule: ${rule}
 
 Step 1: Identify the components:
-${validTerms.map((term, i) => `Term ${i + 1}: \\(${term}\\)`).join('\n')}
+${validTerms.map((term, i) => `Term ${i + 1}: \\[ ${term} \\]`).join('\n')}
 
 Step 2: Analyze the pattern:
 - Pattern type: ${rule.includes('power') ? 'Power sequence' : 
@@ -904,16 +900,16 @@ Step 2: Analyze the pattern:
 - Pattern consistency: Terms follow a clear mathematical progression
 
 Step 3: Apply the pattern:
-\\(${answer}\\)
+\\[ ${answer} \\]
 
-Therefore, the next term in the sequence is \\(${answer}\\).
+Therefore, the next term in the sequence is \\[ ${answer} \\].
 
 Pattern sequence: ${terms.map(t => t === '?' ? '?' : `\\(${t}\\)`).join(', ')}`;
 
             return explanation;
         } catch (error) {
             console.error('Error generating symbolic explanation:', error);
-            return `This symbolic pattern follows the rule: ${rule}. The next term is ${answer}.`;
+            return `This symbolic pattern follows the rule: ${rule}. The next term is \\(${answer}\\).`;
         }
     }
     
@@ -975,23 +971,22 @@ const getNextDifference = (differences) => {
 };
 
 const getDifferencePattern = (differences) => {
-    if (differences.length < 2) return `The difference is constant: ${differences[0]}`;
+    if (differences.length < 2) return `The difference is constant: \\(${differences[0]}\\)`;
     
     const diffOfDiffs = differences[1] - differences[0];
     if (diffOfDiffs === 0) {
-        return `The differences are constant: ${differences[0]}`;
+        return `The differences are constant: \\(${differences[0]}\\)`;
     } else {
-        return `The differences are increasing by ${diffOfDiffs}: ${differences.join(', ')}`;
+        return `The differences are increasing by \\(${diffOfDiffs}\\): \\(${differences.join(', ')}\\)`;
     }
 };
 
 const getNextDifferenceExplanation = (differences) => {
-    if (differences.length < 2) return `The difference remains constant at ${differences[0]}`;
+    if (differences.length < 2) return `The difference remains constant at \\(${differences[0]}\\)`;
     
     const diffOfDiffs = differences[1] - differences[0];
     const nextDiff = differences[differences.length - 1] + diffOfDiffs;
-    return `Since the differences are increasing by ${diffOfDiffs}, the next difference will be: ` +
-           `${differences[differences.length - 1]} + ${diffOfDiffs} = ${nextDiff}`;
+    return `Since the differences are increasing by \\(${diffOfDiffs}\\), the next difference will be: \\[ ${differences[differences.length - 1]} + ${diffOfDiffs} = ${nextDiff} \\]`;
 };
 
 // Add this function to manually reset patterns if needed
@@ -1065,60 +1060,133 @@ const generateLogicalOptions = async (req, res) => {
     try {
         const { pattern, correctAnswer } = req.body;
 
-        const prompt = `Given this logical pattern:
-        Sequence: ${pattern.sequence}
-        Correct Answer: ${correctAnswer}
-        Pattern Type: ${pattern.type}
-        
-        Generate 3 plausible but incorrect multiple choice options that are contextually related to the correct answer.
-        The options should be related to the pattern type:
-        
-        1. For calendar/time sequences (containing months, days, seasons):
-          - Use related time units
-          - Keep options in similar category
-        
-        2. For word pairs/opposites:
-          - Use related word pairs
-          - Keep similar relationship type
-        
-        3. For code/letter patterns:
-          - Use similar format
-          - Keep consistent structure
-        
-        4. For concept relationships:
-          - Use related concepts
-          - Maintain similar relationship type
-        
-        Return ONLY the 3 options as a comma-separated list.
-        The options must be different from the correct answer: ${correctAnswer}`;
+        // Helper function to analyze pattern structure
+        const analyzePattern = (sequence) => {
+            const parts = sequence.split(',').map(p => p.trim());
+            const isNumberShapePair = parts.some(p => p.includes('(') && 
+                p.match(/\(\s*\d+\s*,\s*[A-Za-z]+\s*\)/));
+            const hasNumbers = parts.some(p => /\d+/.test(p));
+            const hasShapes = parts.some(p => 
+                /(Circle|Square|Triangle|Pentagon|Hexagon|Octagon)/.test(p));
+            
+            return { isNumberShapePair, hasNumbers, hasShapes };
+        };
 
-        const response = await axios.post(
-            'https://api.openai.com/v1/chat/completions',
-            {
-                model: "gpt-4-turbo-preview",
-                messages: [
-                    {
-                        role: "system",
-                        content: "You are a pattern generator. Generate only the requested options, no explanation."
-                    },
-                    {
-                        role: "user",
-                        content: prompt
+        // Helper function to extract pattern components
+        const extractComponents = (sequence) => {
+            const matches = sequence.match(/\((\d+),\s*([A-Za-z]+)\)/g) || [];
+            return matches.map(m => {
+                const [_, num, shape] = m.match(/\((\d+),\s*([A-Za-z]+)\)/);
+                return { number: parseInt(num), shape };
+            });
+        };
+
+        // Analyze the pattern
+        const patternAnalysis = analyzePattern(pattern.sequence);
+        const components = extractComponents(pattern.sequence);
+
+        // Generate plausible but incorrect options based on pattern type
+        let options = [correctAnswer];
+
+        if (patternAnalysis.isNumberShapePair) {
+            // Extract number and shape from correct answer
+            const [_, correctNum, correctShape] = correctAnswer.match(/\((\d+),\s*([A-Za-z]+)\)/) || [];
+            const correctNumber = parseInt(correctNum);
+
+            // Find the number pattern
+            const numberPattern = components.map(c => c.number);
+            const numberDiff = numberPattern[1] - numberPattern[0];
+
+            // List of shapes in geometric order
+            const shapes = ['Circle', 'Triangle', 'Square', 'Pentagon', 'Hexagon', 'Octagon', 'Star'];
+            const correctShapeIndex = shapes.indexOf(correctShape);
+
+            // Generate misleading but plausible options
+            const alternativeOptions = [
+                // Different number, expected shape
+                `(${correctNumber + numberDiff}, ${correctShape})`,
+                // Expected number, different shape
+                `(${correctNumber}, ${shapes[correctShapeIndex + 1] || shapes[0]})`,
+                // Different progression pattern
+                `(${correctNumber - numberDiff}, ${shapes[correctShapeIndex - 1] || shapes[shapes.length - 1]})`,
+                // Completely different but plausible pattern
+                `(${correctNumber * 2}, ${shapes[(correctShapeIndex + 2) % shapes.length]})`
+            ];
+
+            // Add some options with different number patterns
+            options.push(...alternativeOptions.slice(0, 3));
+        } else {
+            // For other logical patterns, generate contextually relevant options
+            const prompt = `Given this logical pattern:
+            Sequence: ${pattern.sequence}
+            Correct Answer: ${correctAnswer}
+            
+            Generate 3 plausible but incorrect multiple choice options that:
+            1. Follow a similar but slightly different pattern logic
+            2. Look convincing but are incorrect
+            3. Maintain the same format and structure
+            4. Are challenging to distinguish from the correct answer
+            5. Use similar components but with different relationships
+            
+            For number-based patterns:
+            - Use different mathematical relationships
+            - Modify the progression pattern
+            - Change the rate of change
+            
+            For shape-based patterns:
+            - Use different shape progressions
+            - Modify the transformation rules
+            - Change the pattern of shape changes
+            
+            For mixed patterns:
+            - Alter both numeric and shape components
+            - Create convincing alternative progressions
+            - Maintain pattern complexity
+            
+            Return ONLY the 3 options as a comma-separated list.`;
+
+            const response = await axios.post(
+                'https://api.openai.com/v1/chat/completions',
+                {
+                    model: "gpt-4-turbo-preview",
+                    messages: [
+                        {
+                            role: "system",
+                            content: "You are a pattern generator creating challenging but plausible incorrect options."
+                        },
+                        {
+                            role: "user",
+                            content: prompt
+                        }
+                    ],
+                    temperature: 0.8,
+                    max_tokens: 150
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                        'Content-Type': 'application/json'
                     }
-                ],
-                temperature: 0.7,
-                max_tokens: 100
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-                    'Content-Type': 'application/json'
                 }
-            }
-        );
+            );
 
-        const optionsText = response.data.choices[0].message.content.trim();
-        const options = optionsText.split(',').map(opt => opt.trim());
+            const generatedOptions = response.data.choices[0].message.content
+                .trim()
+                .split(',')
+                .map(opt => opt.trim())
+                .filter(opt => opt !== correctAnswer)
+                .slice(0, 3);
+
+            options.push(...generatedOptions);
+        }
+
+        // Ensure we have exactly 4 options
+        while (options.length > 4) {
+            options.pop();
+        }
+
+        // Shuffle the options
+        options = options.sort(() => Math.random() - 0.5);
 
         res.json({ options });
 
